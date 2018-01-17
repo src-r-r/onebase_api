@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""
+This file is part of 1Base.
+
+1Base is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+1Base is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+from mongoengine import (
+    Document,
+    ReferenceField,
+    # URLField,
+    TextField,
+    DateTimeField,
+    ListField
+)
+
+from datetime import (
+    datetime
+)
+
+from odi_api.models.mixin import TimestampOrderableMixin
+
+EVENT_ACTIONS = (
+    ('c',   'Created'),
+    ('m',   'Modified'),
+    ('x',   'Deleted'),
+)
+
+
+class Action(TimestampOrderableMixin, Document):
+    """ Modification, creation, or deletion of a Document.
+
+    An item of history about a particular Document.
+    """
+
+    user = ReferenceField('User', required=True)
+    action = TextField(required=True, choices=EVENT_ACTIONS)
+    timestamp = DateTimeField(required=True, default=datetime.now())
