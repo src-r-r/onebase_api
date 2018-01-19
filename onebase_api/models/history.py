@@ -20,30 +20,44 @@ from mongoengine import (
     Document,
     ReferenceField,
     # URLField,
-    TextField,
+    StringField,
     DateTimeField,
-    ListField
+    ListField,
+    DynamicDocument,
+    DynamicEmbeddedDocument,
 )
 
 from datetime import (
     datetime
 )
 
-from odi_api.models.mixin import TimestampOrderableMixin
-
-EVENT_ACTIONS = (
-    ('c',   'Created'),
-    ('m',   'Modified'),
-    ('x',   'Deleted'),
-)
+from onebase_api.models.mixin import TimestampOrderableMixin
 
 
-class Action(TimestampOrderableMixin, Document):
+class Action(TimestampOrderableMixin, DynamicEmbeddedDocument):
     """ Modification, creation, or deletion of a Document.
 
     An item of history about a particular Document.
     """
 
+    EVENT_CREATE = 'c'
+    EVENT_MODIFY = 'm'
+    EVENT_DELETE = 'd'  # NOTE: probably not used
+    EVENT_READONLY = 'r'
+    EVENT_WRITABLE = 'w'
+    EVENT_HIDE = 'h'
+    EVENT_SHOW = 's'
+
+    EVENTS = (
+        (EVENT_CREATE,      'Created'),
+        (EVENT_MODIFY,      'Modified'),
+        (EVENT_DELETE,      'Deleted'),  # probably not used
+        (EVENT_READONLY,    'Mark Read-Only'),
+        (EVENT_WRITABLE,    'Mark Writable'),
+        (EVENT_HIDE,        'Hide'),
+        (EVENT_SHOW,        'Show'),
+    )
+
     user = ReferenceField('User', required=True)
-    action = TextField(required=True, choices=EVENT_ACTIONS)
+    event = StringField(required=True, choices=EVENTS)
     timestamp = DateTimeField(required=True, default=datetime.now())

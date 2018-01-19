@@ -16,26 +16,23 @@ You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from mongoengine import (
-    Document,
-    StringField,
-    ListField,
-    EmailField,
-    ReferenceField,
+import unittest
+import logging
+
+from onebase_api.tests.models.base import (
+    CollectionUnitTest,
+    global_setup,
+    TEST_COLLECTION_NAME,
+    fake,
+    )
+
+from onebase_api.models.main import (
+    Type,
+    Path,
+    Node,
+    Key,
+    Value,
 )
 
-
-class Group(Document):
-    """ Collection of users with certain permissions. """
-
-    name = StringField(primary_key=True)
-    permissions = ListField(StringField(max_length=1024))
-
-
-class User(Document):
-    """ An account on 1base. """
-
-    email = EmailField(max_length=1024, required=True, unique=True)
-    password = StringField(max_length=1027, required=True)
-    username = StringField(max_length=120, required=False, unique=True)
-    groups = ListField(ReferenceField(Group))
+global_setup()
+logger = logging.getLogger(__name__)

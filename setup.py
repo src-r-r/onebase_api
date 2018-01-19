@@ -18,7 +18,7 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 
 from setuptools import setup, find_packages
 setup(
-    name="1base_api",
+    name="onebase_api",
     version="0.1",
     packages=find_packages(),
 

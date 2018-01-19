@@ -23,21 +23,32 @@ from mongoengine import (
     StringField,
 )
 
-from odi_api.models.mixin import (
-    DiscussionMixin
+from onebase_api.models.mixin import (
+    DiscussionMixin,
+    JsonMixin,
+    HistoricalMixin,
 )
 
-COLLECTION_METHOD = (
-    ('man', 'Manually Entered'),
-    ('in', 'Internally Generated'),
-    ('ex', 'Externally Generated'),
-    ('ref', 'Referenced'),
-)
-DEFAULT_COLLECTION_METHOD = 'man'
 
+class Source(HistoricalMixin, JsonMixin, DiscussionMixin):
+    """ Base class for a source.
 
-class Source(DiscussionMixin, Document):
-    """ Base class for a source. """
+    Sources are one of the few documents where there isn't an "owner." Only a
+    history is recorded. for each source.
+    """
+
+    METHOD_MANUAL = 'man'
+    METHOD_INTERNAL = 'in'
+    METHOD_EXTERNAL = 'ex'
+    METHOD_REFERENCED = 'ref'
+
+    COLLECTION_METHOD = (
+        (METHOD_MANUAL,         'Manually Entered'),
+        (METHOD_INTERNAL,       'Internally Generated'),
+        (METHOD_EXTERNAL,       'Externally Generated'),
+        (METHOD_REFERENCED,     'Referenced'),
+    )
+    DEFAULT_COLLECTION_METHOD = METHOD_MANUAL
 
     collection_method = StringField(choices=COLLECTION_METHOD,
                                     required=True,
