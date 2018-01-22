@@ -2,12 +2,12 @@
 """
 This file is part of 1Base.
 
-Foobar is free software: you can redistribute it and/or modify
+1Base is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-Foobar is distributed in the hope that it will be useful,
+1Base is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
@@ -17,6 +17,9 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from setuptools import setup, find_packages
+
+from onebase_common.testing.commands import test
+
 setup(
     name="onebase_api",
     version="0.1",
@@ -25,6 +28,10 @@ setup(
     # Project uses reStructuredText, so ensure that the docutils get
     # installed or upgraded on the target machine
     install_requires=['docutils>=0.3'],
+
+    cmdclass={
+        'testt': test,
+    },
 
     # metadata for upload to PyPI
     author="Jordan Hewitt",

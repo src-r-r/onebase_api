@@ -18,30 +18,26 @@
 
 from os.path import join
 
-from odi_api.fields import (
+from onebase_api.fields import (
     ForgivingURLField,
     SlugField,
     )
-from odi_api.exceptions import OneBaseException
+from onebase_api.exceptions import OneBaseException
 from mongoengine import (
     StringField,
-    IntegerField,
+    IntField as IntegerField,
     BooleanField,
     # ListField,
     ReferenceField,
-    TextField,
     Document,
     DynamicField,
     DynamicDocument,
 )
 import requests
 
-from odi_api.models.discussion import (
-    # Discussion,
-    DiscussionMixin,
-)
-from odi_api.models.mixin import (
+from onebase_api.models.mixin import (
     HistoricalMixin,
+    DiscussionMixin,
 )
 
 
@@ -77,7 +73,7 @@ class Path(DiscussionMixin, HistoricalMixin, Document):
     """
 
     parent = ReferenceField('Path')
-    name = TextField(max_length=409, required=True, primary_key=True)
+    name = StringField(max_length=409, required=True, primary_key=True)
 
     def __str__(self):
         """ String representation of the Path. """
@@ -102,8 +98,8 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
     """
 
     name = SlugField(max_length=1024, primary_key=True)
-    title = TextField(max_length=2048)
-    description = TextField(max_length=4096)
+    title = StringField(max_length=2048)
+    description = StringField(max_length=4096)
     path = ReferenceField(Path, required=True)
 
     def full_path(self):
@@ -111,22 +107,22 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
         return join(str(self.path), self.name)
 
 
-class Key(DiscussionMixin, HistoricalMixin, DiscussionMixin, Document):
+class Key(DiscussionMixin, HistoricalMixin, Document):
     """ Named slot within a node that contains values.
 
     Equivalent to an SQL column.
     """
 
     node = ReferenceField(Node)
-    name = TextField(max_length=1024, required=True)
-    comment = TextField(max_length=4096)
+    name = StringField(max_length=1024, required=True)
+    comment = StringField(max_length=4096)
     soft_type = ReferenceField(Type)
     size = IntegerField(max_length=128)
     position = IntegerField(max_length=128)
     primary = BooleanField()
 
 
-class Value(DynamicDocument, DiscussionMixin):
+class Slot(DynamicDocument, DiscussionMixin):
     """ Data value.
 
     Equivalent to a single cell in an SQL table.

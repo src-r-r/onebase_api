@@ -31,8 +31,22 @@ from onebase_api.models.main import (
     Path,
     Node,
     Key,
-    Value,
+    Slot,
 )
+from onebase_api.api import app
+from onebase_api.api.validators import prepend_url as _
 
 global_setup()
 logger = logging.getLogger(__name__)
+
+
+class TestValidators(unittest.TestCase):
+
+    def test_int(self):
+        with app.app_context():
+            client = app.test_client()
+            resp = client.post(_('/int'),
+                               content_type='application/json',
+                               data={'value': 1024, })
+        logger.debug(resp.response)
+        self.assertEqual(resp.status_code, 200)
