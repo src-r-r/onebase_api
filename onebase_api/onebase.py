@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+from json import dumps
 from http import HTTPStatus as STATUS
 from flask import (
     Flask,
@@ -35,7 +36,7 @@ class ApiResponse(Response):
 
     """
 
-    def __init__(self, response=None, status=None, headers=None,
+    def __init__(self, response=None, status=STATUS.OK, headers=None,
                  mimetype='application/json',
                  content_type='application/json',
                  direct_passthrough=False,
@@ -70,14 +71,33 @@ class ApiResponse(Response):
             data=data,
             message=message,
         )
-        return super(ApiResponse, self).__init__(response=body,
+        return super(ApiResponse, self).__init__(response=dumps(body),
                                                  status=status,
                                                  headers=headers,
                                                  mimetype=mimetype,
                                                  content_type=content_type)
 
+class OneBaseApp(Flask):
 
-_app = Flask(__name__)
+    def __init__(self, *args, **kwargs):
+        self.rest_docs = {}
+        super(OneBaseApp, self).__init__(*args, **kwargs)
+
+    def add_url_rule(self, rule, endpoint=None, view_func=None, **options):
+        """ Add the url rule, but also add documentation.
+        """
+        if view_func:
+            self.rest_docs[rule] = {
+                'documentation': view_func.__doc__,
+                'options': options,
+            }
+        else:
+            logger.warn('no view func specified')
+        return super(OneBaseApp, self).add_url_rule(rule, endpoint, view_func,
+                                                    **options)
+
+
+_app = OneBaseApp(__name__)
 
 
 @_app.errorhandler(OneBaseException)

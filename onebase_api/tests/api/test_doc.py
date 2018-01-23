@@ -18,6 +18,9 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
 import logging
+from json import (dumps as ds, loads as ls)
+from faker import Faker
+fake = Faker()
 
 from onebase_api.tests.models.base import (
     CollectionUnitTest,
@@ -34,19 +37,18 @@ from onebase_api.models.main import (
     Slot,
 )
 from onebase_api.api import app
-from onebase_api.api.validators import prepend_url as _
+from onebase_api.api.doc import prepend_url as _
 
 global_setup()
 logger = logging.getLogger(__name__)
 
+class TestDoc(unittest.TestCase):
 
-class TestValidators(unittest.TestCase):
-
-    def test_int(self):
+    def test_index(self):
         with app.app_context():
             client = app.test_client()
-            resp = client.post(_('/int'),
-                               content_type='application/json',
-                               data={'value': 1024, })
-        logger.debug(resp.response)
-        self.assertEqual(resp.status_code, 200)
+            resp = client.get(_('/'))
+            logger.debug('THIS IS...THE DOCUMENTATION: {}'.format(resp.data))
+            d = ls(resp.data.decode('ascii'))
+            self.assertEqual(resp.status_code, 200)
+            self.assertGreater(len(d['data'].keys()), 0)

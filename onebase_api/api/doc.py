@@ -16,4 +16,20 @@ You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from onebase_api.onebase import app
+import logging
+
+from onebase_api.api import app
+from onebase_api.onebase import ApiResponse
+from onebase_common import settings
+
+logger = logging.getLogger(__name__)
+
+def prepend_url(url):
+    """ Prepend a URL predicate to a URL. """
+    return '/api/' + settings.API_VERSION + '/doc' + url
+
+_ = prepend_url
+
+@app.route(_('/'), methods=['GET',])
+def all_doc():
+    return ApiResponse(data=app.rest_docs)

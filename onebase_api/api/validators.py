@@ -26,12 +26,17 @@ from flask import (
 )
 
 from onebase_common import settings
+from onebase_common.log.setup import configure_logging
 from onebase_api.onebase import ApiResponse
 from onebase_api.onebase import app
 
+configure_logging()
+
 """ Regular expressions used for validation.
 """
-RE_INT = re.compile(r'^[\d]+$').match
+RE_INT = re.compile(r'^\-?\d+$').match
+RE_BOOLEAN = re.compile(r'^(false|true|1|0)$', re.I).match
+RE_FLOAT = re.compile(r'^\-?\d+\.\d+$').match
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +50,7 @@ _ = prepend_url
 
 
 def make_validation_response(is_valid, ok_status=STATUS.OK,
-                             error_status=STATUS.NOT_ACCEPTABLE):
+                             error_status=STATUS.BAD_REQUEST):
     """ Make an API response from a validation result.
 
     :param is_valid: True if the validation was succcessful.
@@ -82,9 +87,44 @@ def validate():
     return ApiResponse()
 
 
+def get_parts():
+    body = request.get_json()
+    return (str(body['value']), int(body['length']))
+
+def basic_regex_validation(REGEX_FUNC):
+    """ Validate a slot by a given regex `match` function.
+
+    This method will also check the length of the value. If the length of the
+    `Type` is greater than the length of the slot, return False.
+
+    :param REGEX_FUNC: Regular expression `match` function (or similar)
+
+    :return: True if request's value is valid, False otherwise.
+    """
+    (value, length) = get_parts()
+    return (len(value) < length and REGEX_FUNC(value))
+
+
 @app.route(_('/int'), methods=['POST', ])
 def validate_int():
     """ Validate an integer. """
-    body = request.get_json()
-    val = body['value']
-    return make_validation_response(RE_INT(val))
+    return make_validation_response(basic_regex_validation(RE_INT))
+
+
+@app.route(_('/string'), methods=['POST', ])
+def validate_str():
+    """ validate a string. """
+    (value, length) = get_parts()
+    return make_validation_response(len(value) < length)
+
+
+@app.route(_('/boolean'), methods=['POST', ])
+def validate_boolean():
+    """ Validate a boolean value. """
+    return make_validation_response(basic_regex_validation(RE_BOOLEAN))
+
+
+@app.route(_('/float'), methods=['POST', ])
+def validate_float():
+    """ Validate a flaot value. """
+    return make_validation_response(basic_regex_validation(RE_FLOAT))
