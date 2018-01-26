@@ -17,6 +17,7 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import logging
+from secrets import token_urlsafe
 
 from mongoengine import (
     Document,
@@ -25,6 +26,7 @@ from mongoengine import (
     EmailField,
     ReferenceField,
     DateTimeField,
+    BooleanField,
 )
 
 from onebase_common.settings import ADMIN_GROUPS
@@ -70,6 +72,12 @@ class User(JsonMixin, Document):
                            sparse=True)
     groups = ListField(ReferenceField(Group), default=list())
 
+    # attributes required by flask-login
+    # https://flask-login.readthedocs.io/en/latest/
+    # `is_authenticated` and `is_anonymous` are attibutes in constructor
+    is_active = BooleanField(default=False)
+    verification = StringField(default=token_urlsafe())
+
     # Personal "business" information
     sex = StringField(choices=SEX_CHOICES)
     first_name = StringField(max_length=1024)
@@ -80,6 +88,20 @@ class User(JsonMixin, Document):
 
     # Frilly information
     avatar = ForgivingURLField()
+
+    def __init__(self, *args, **kwargs):
+        """ Construct a new user. """
+        self.is_authenticated = False
+        self.is_anonymous = False
+        super(User, self).__init__(*args, **kwargs)
+
+    def get_id(self):
+        """ Get ID of the user.
+
+        Required by
+        `flask-login <https://flask-login.readthedocs.io/en/latest/>`_
+        """
+        return self.id.encode('unicode')
 
     @property
     def all_permissions(self):

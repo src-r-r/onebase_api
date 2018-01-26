@@ -15,8 +15,11 @@
     You should have received a copy of the GNU General Public License
     along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
+import logging
 from mongoengine.fields import BaseField
 import re
+
+logger = logging.getLogger(__name__)
 
 # https://regex101.com/r/wjsGig/3
 RE_URI = re.compile(r'^(\w{1,5}\:\/\/)?' # Protocol (e.g. https://)
@@ -42,7 +45,13 @@ class ForgivingURLField(BaseField):
         super(ForgivingURLField, self).__init__(*args, **kwargs)
 
     def validate(self, value, clean=True):
-        return RE_URI(value) is not None
+        try:
+            return RE_URI(value) is not None
+        except TypeError as e:
+            logger.error(e)
+            logger.error("...and recieved {} instead!"
+                         .format(type(value).__name__))
+            raise e
 
 
 class SlugField(BaseField):
