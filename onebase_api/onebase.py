@@ -16,17 +16,42 @@ You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import logging
 from json import dumps
 from http import HTTPStatus as STATUS
 from flask import (
     Flask,
     Response,
+    Blueprint,
     # make_response,
     jsonify,
 )
 
 from onebase_api.exceptions import OneBaseException
-from onebase_common import settings
+from onebase_common import settings as common_settings
+
+logger = logging.getLogger(__name__)
+
+
+class OnebaseBlueprint(Blueprint):
+    """ Extends Flask's Blueprint with a few extra features. """
+
+    def __init__(self, *args, **kwargs):
+        self._routes = {}
+        super(OnebaseBlueprint, self).__init__(*args, **kwargs)
+
+    def route(self, rule, **options):
+        """Like :meth:`Flask.route` but for a blueprint.  The endpoint for the
+        :func:`url_for` function is prefixed with the name of the blueprint.
+        """
+        p = self.url_prefix + rule
+        logger.debug('adding {}'.format(p))
+        def decorator(f):
+            self._routes.update({p: f})
+            endpoint = options.pop("endpoint", f.__name__)
+            self.add_url_rule(rule, endpoint, f, **options)
+            return f
+        return decorator
 
 
 class ApiResponse(Response):
@@ -66,7 +91,7 @@ class ApiResponse(Response):
             status = status.value
         status = str(status)
         body = dict(
-            info=settings.RESPONSE_INFO,
+            info=common_settings.RESPONSE_INFO,
             status=status,
             data=data,
             message=message,
@@ -95,22 +120,3 @@ class OneBaseApp(Flask):
             logger.warn('no view func specified')
         return super(OneBaseApp, self).add_url_rule(rule, endpoint, view_func,
                                                     **options)
-
-
-_app = OneBaseApp(__name__)
-
-
-@_app.errorhandler(OneBaseException)
-def handle_onebase_exception(obe):
-    """ Wrap an ApiResponse around the exception. """
-    return ApiResponse(status=STATUS.INTERNAL_SERVER_ERROR,
-                       data={
-                        'exception': {
-                            'error_code': obe.error_code,
-                            'message': str(obe)
-                        }
-                       })
-
-
-_app.response_class = ApiResponse
-app = _app

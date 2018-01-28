@@ -15,3 +15,44 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
+
+from http import HTTPStatus as STATUS
+import logging
+
+from onebase_api.onebase import ApiResponse
+from onebase_api.exceptions import OneBaseException
+
+from onebase_api.api.validators import validator_views
+from onebase_api.api.representers import repr_views
+from onebase_api import app
+
+logger = logging.getLogger(__name__)
+
+BLUEPRINTS = (
+    validator_views,
+    repr_views,
+)
+
+
+@app.route('/', methods=['GET', ])
+def hello():
+    return ApiResponse()
+
+
+for bp in BLUEPRINTS:
+    app.register_blueprint(bp)
+
+
+app.response_class = ApiResponse
+
+
+@app.errorhandler(OneBaseException)
+def handle_onebase_exception(obe):
+    """ Wrap an ApiResponse around the exception. """
+    return ApiResponse(status=STATUS.INTERNAL_SERVER_ERROR,
+                       data={
+                        'exception': {
+                            'error_code': obe.error_code,
+                            'message': str(obe)
+                        }
+                       })

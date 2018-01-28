@@ -21,14 +21,19 @@ import logging
 
 from http import HTTPStatus as STATUS
 from flask import (
+    Blueprint,
     request,
     # make_response
 )
 
 from onebase_common import settings
 from onebase_common.log.setup import configure_logging
-from onebase_api.onebase import ApiResponse
-from onebase_api.onebase import app
+from onebase_api.exceptions import OneBaseException
+from onebase_api.onebase import (
+    ApiResponse,
+    OnebaseBlueprint,
+    )
+from onebase_api import app
 
 configure_logging()
 
@@ -38,16 +43,19 @@ RE_INT = re.compile(r'^\-?\d+$').match
 RE_BOOLEAN = re.compile(r'^(false|true|1|0)$', re.I).match
 RE_FLOAT = re.compile(r'^\-?\d+\.\d+$').match
 
+# Represents a "forgiving" URI.
+# https://regex101.com/r/wjsGig/4
+# Probably needs to be worked on. Hence the URL :-)
+RE_URI = re.compile(r'^(\w{1,5}\:\/\/)?' # Protocol (e.g. https://)
+                    r'(([\w\d\-](\.[\w\d\-])*)+)?' # Domain (e.g. example.com)
+                    r'(\/([^\?]\/?)*)?' # Path (e.g. /path/to/example/)
+                    r'(\?([^\=]+\=[^\&]+)*)?$'
+                    ).match
+
 logger = logging.getLogger(__name__)
 
-
-def prepend_url(url):
-    """ Prepend a URL predicate to a URL. """
-    return '/api/' + settings.API_VERSION + '/validate' + url
-
-
-_ = prepend_url
-
+validator_views = OnebaseBlueprint('validators', __name__,
+                                   url_prefix='/validate')
 
 def make_validation_response(is_valid, ok_status=STATUS.OK,
                              error_status=STATUS.BAD_REQUEST):
@@ -67,29 +75,12 @@ def make_validation_response(is_valid, ok_status=STATUS.OK,
         return ApiResponse(status=error_status)
 
 
-@app.route(_(''), methods=['POST', ])
-def validate():
-    """ Validate a value.
-
-    .. request::
-        body:
-            value:
-                type: str
-                description: physical value of the slot
-            length:
-                type: int
-                description: maximum size allowed for the value.
-
-    .. response:
-        status: 200 if validation passes, another error code otherwise.
-
-    """
-    return ApiResponse()
-
-
 def get_parts():
     body = request.get_json()
-    return (str(body['value']), int(body['length']))
+    for req in ('value', 'size'):
+        if not body.get(req, None):
+            raise OneBaseException('E-102', keys=[req, ])
+    return (str(body['value']), int(body['size']))
 
 def basic_regex_validation(REGEX_FUNC):
     """ Validate a slot by a given regex `match` function.
@@ -102,29 +93,127 @@ def basic_regex_validation(REGEX_FUNC):
     :return: True if request's value is valid, False otherwise.
     """
     (value, length) = get_parts()
-    return (len(value) < length and REGEX_FUNC(value))
+    if len(value) > length:
+        raise OneBaseException('E-100',
+                               key='value',
+                               expected=length,
+                               result=len(value))
+    if not REGEX_FUNC(value):
+        raise OneBaseException('E-101', message="Invalid format")
+    return (length is not None) and (len(value) < length and REGEX_FUNC(value))
 
 
-@app.route(_('/int'), methods=['POST', ])
+@validator_views.route('/', methods=['GET', ])
+def validate():
+    """ Get a list of the validators. """
+    data = {
+        'validators': {},
+    }
+    for (path, f) in validator_views._routes.items():
+        data['validators'].update(
+            {
+                path: {
+                    'name': f.__name__,
+                    'doc': f.__doc__.split('\n'),
+                }
+            }
+        )
+    return ApiResponse(data=data)
+
+
+@validator_views.route('/int', methods=['POST', ])
 def validate_int():
-    """ Validate an integer. """
+    """ Validate an integer.
+
+    .. request::
+        body:
+            value:
+                type: str
+                description: physical value of the slot
+            size:
+                type: int
+                description: maximum size allowed for the value.
+
+    .. response:
+        status: 200 if validation passes, another error code otherwise.
+    """
     return make_validation_response(basic_regex_validation(RE_INT))
 
 
-@app.route(_('/string'), methods=['POST', ])
+@validator_views.route('/string', methods=['POST', ])
 def validate_str():
-    """ validate a string. """
+    """ validate a string.
+
+    .. request::
+        body:
+            value:
+                type: str
+                description: physical value of the slot
+            size:
+                type: int
+                description: maximum size allowed for the value.
+
+    .. response:
+        status: 200 if validation passes, another error code otherwise.
+
+    """
     (value, length) = get_parts()
     return make_validation_response(len(value) < length)
 
 
-@app.route(_('/boolean'), methods=['POST', ])
+@validator_views.route('/boolean', methods=['POST', ])
 def validate_boolean():
-    """ Validate a boolean value. """
+    """ Validate a boolean value.
+
+    .. request::
+        body:
+            value:
+                type: str
+                description: physical value of the slot
+            size:
+                type: int
+                description: maximum size allowed for the value.
+
+    .. response:
+        status: 200 if validation passes, another error code otherwise.
+
+    """
     return make_validation_response(basic_regex_validation(RE_BOOLEAN))
 
 
-@app.route(_('/float'), methods=['POST', ])
+@validator_views.route('/float', methods=['POST', ])
 def validate_float():
-    """ Validate a flaot value. """
+    """ Validate a float value.
+
+    .. request::
+        body:
+            value:
+                type: str
+                description: physical value of the slot
+            size:
+                type: int
+                description: maximum size allowed for the value.
+
+    .. response:
+        status: 200 if validation passes, another error code otherwise.
+    """
     return make_validation_response(basic_regex_validation(RE_FLOAT))
+
+
+@validator_views.route('/image', methods=['POST', ])
+def validate_image():
+    """ Validate an image.
+
+    .. request::
+        body:
+            value:
+                type: str
+                description: URL to an image (A path will assume relative.)
+            size:
+                type: int
+                description: maximum size allowed for the value.
+
+    .. response:
+        status: 200 if validation passes, another error code otherwise.
+    """
+    return make_validation_response(basic_regex_validation(RE_URI))

@@ -36,12 +36,13 @@ from onebase_api.models.main import (
     Key,
     Slot,
 )
-from onebase_api.api import app
-from onebase_api.api.validators import prepend_url as _
+from onebase_api import app
 
 global_setup()
 logger = logging.getLogger(__name__)
 
+def _(u):
+    return '/validate' + u
 
 class TestValidators(unittest.TestCase):
 
@@ -57,6 +58,7 @@ class TestValidators(unittest.TestCase):
                 logger.error('data:     {}'.format(data))
                 logger.error('status:   {}'.format(status))
                 logger.error(e)
+                raise e
 
     def do_fail_pass(self, path, pass_val, fail_val):
         with app.app_context():
@@ -70,23 +72,23 @@ class TestValidators(unittest.TestCase):
         logger.debug('globals: {}'.format(app.view_functions))
         i = fake.pyint()
         self.do_fail_pass(_('/int'),
-                          {'value': i, 'length': len(str(i))+1, },
-                          {'value': i, 'length': len(str(i))-5, })
+                          {'value': i, 'size': len(str(i))+1, },
+                          {'value': i, 'size': len(str(i))-5, })
         self.do_fail_pass(_('/int'),
-                          {'value': 0-i, 'length': len(str(0-i))+1, },
-                          {'value': fake.pystr(), 'length': len(str(i))+5, })
+                          {'value': 0-i, 'size': len(str(0-i))+1, },
+                          {'value': fake.pystr(), 'size': len(str(i))+5, })
 
     def test_str(self):
         s = fake.sentence(nb_words=10)
         self.do_fail_pass(_('/string'),
-                          {'value': s, 'length': len(s)+1,},
-                          {'value': s, 'length': len(s)-5})
+                          {'value': s, 'size': len(s)+1,},
+                          {'value': s, 'size': len(s)-5})
 
     def test_float(self):
         f = fake.pyfloat()
         self.do_fail_pass(_('/float'),
-                          {'value': f, 'length': len(str(f))+1, },
-                          {'value': f, 'length': len(str(f))-5}, )
+                          {'value': f, 'size': len(str(f))+1, },
+                          {'value': f, 'size': len(str(f))-5}, )
         self.do_fail_pass(_('/float'),
-                          {'value': 0-f, 'length': len(str(0-f))+1, },
-                          {'value': fake.pystr(), 'length': len(str(f))+5, })
+                          {'value': 0-f, 'size': len(str(0-f))+1, },
+                          {'value': fake.pystr(), 'size': len(str(f))+5, })

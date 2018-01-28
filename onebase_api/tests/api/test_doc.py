@@ -36,7 +36,7 @@ from onebase_api.models.main import (
     Key,
     Slot,
 )
-from onebase_api.api import app
+from onebase_api import app
 from onebase_api.api.doc import prepend_url as _
 
 global_setup()

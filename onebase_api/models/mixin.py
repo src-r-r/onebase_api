@@ -30,6 +30,7 @@ from mongoengine import (
     EmbeddedDocumentField,
     GenericEmbeddedDocumentField,
     DynamicDocument,
+    LazyReferenceField,
 )
 
 from mongoengine.fields import (
@@ -114,7 +115,7 @@ class DiscussionMixin(Document):
         'abstract': True
     }
 
-    discussions = ListField(ReferenceField('Discussion'))
+    discussions = ListField(LazyReferenceField('Discussion'))
 
 
 class HistoricalMixin(DynamicDocument):

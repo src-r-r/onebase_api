@@ -27,6 +27,7 @@ from mongoengine import (
     ReferenceField,
     DateTimeField,
     BooleanField,
+    DynamicDocument,
 )
 
 from onebase_common.settings import ADMIN_GROUPS
@@ -63,7 +64,7 @@ class Group(JsonMixin, Document):
         return super(Group, self).__str__()
 
 
-class User(JsonMixin, Document):
+class User(JsonMixin, DynamicDocument):
     """ An account on 1base. """
 
     email = EmailField(max_length=1024, required=True, unique=True)
@@ -86,6 +87,9 @@ class User(JsonMixin, Document):
     birth_date = DateTimeField()
     phone_number = StringField(max_length=48)
 
+    # Developer information
+    api_key = StringField()
+
     # Frilly information
     avatar = ForgivingURLField()
 
@@ -102,6 +106,9 @@ class User(JsonMixin, Document):
         `flask-login <https://flask-login.readthedocs.io/en/latest/>`_
         """
         return self.id.encode('unicode')
+
+    def generate_api_key(self):
+        self.api_key = token_urlsafe()
 
     @property
     def all_permissions(self):

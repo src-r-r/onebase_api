@@ -18,7 +18,7 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
 
-from onebase_api.api import app
+from onebase_api import app
 from onebase_api.onebase import ApiResponse
 from onebase_common import settings
 

@@ -16,4 +16,4 @@ You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from onebase_api.onebase import app
+from onebase_api import app

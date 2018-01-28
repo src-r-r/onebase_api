@@ -15,8 +15,3 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
-from onebase_api.onebase import OneBaseApp
-
-app = OneBaseApp(__name__)
-
-import onebase_api.api
