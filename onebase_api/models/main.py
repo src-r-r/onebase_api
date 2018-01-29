@@ -19,6 +19,10 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 import logging
 
 from os.path import join
+import uuid
+from urllib.parse import (
+    urlparse
+)
 
 from onebase_api.fields import (
     ForgivingURLField,
@@ -39,6 +43,7 @@ from mongoengine import (
     CASCADE,
     EmbeddedDocument,
     EmbeddedDocumentListField,
+    UUIDField,
 )
 import requests
 
@@ -131,7 +136,7 @@ class Key(DiscussionMixin, HistoricalMixin, JsonMixin):
                                    passthrough=True)
     size = IntegerField(max_length=128, required=True)
     position = IntegerField(max_length=128)
-    primary = BooleanField()
+    is_primary = BooleanField(default=False)
 
     @property
     def node(self):
@@ -152,9 +157,114 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
     description = StringField(max_length=4096)
     keys = ListField(LazyReferenceField(Key, passthrough=False),
                      required=True)
+    rows = ListField(UUIDField())
+
+    def syncronize_rows(self):
+        """ Syncronize the row IDs. """
+        slots = Slot.objects(key__in=self.get_keys).all()
+        self.rows = []
+        for s in slots:
+            if s.row_id not in self.rows:
+                self.rows.append(s.row_id)
+
+    def drop_rows(self, *row_ids):
+        """ Drop rows with the given row_id. """
+        Slot.objects(key__in=self.keys, row_id__in=row_ids).delete()
+        slot.syncronize_rows()
 
     def get_keys(self):
+        """ Get keys of the node. """
         return Key.objects(id__in=self.keys).all()
+
+    def get_row_id(self, row_num=None):
+        """" Get a row ID from a row number.
+
+        :param row_num: Optional. Row number from which to get row ID.
+            Ommitting will return the last row ID.
+
+        :return: Row ID of specified row_num, or 0 if no rows are found.
+
+        """
+        rc = self.row_count
+        if rc is 0:
+            return 0
+        row_num = row_num or rc-1
+        slot = Slot.objects(key__in=self.keys, row_num=row_num).first()
+        if not slot:
+            return 0
+        return slot.row_num
+
+    def insert(self, user, *slot_params, **kwargs):
+        """ Insert a new row with a list of slot definitions.
+
+        :param slot_params: A list of dicts. Example:
+
+            insert([ # start of 1st new row
+                    { 'key': key1, 'value': 4, },
+                    { 'key': key2, 'value': 10, },
+                    ...
+                ],
+                [ # start of 2nd new row
+                    { 'key': key1, 'value': 13, },
+                    { 'key': key2, 'value': 33, },
+                    ...
+                ])
+            ]
+
+        :param row_id: Row ID of the row to insert AFTER
+
+        :parm row: Row number of the row to insert AFTER. Will take precedence
+            over `row_id`.
+
+        :param error_action: Action taken if an error occurs. Options:
+
+        :`give_up`:
+            Simply give up and throw an exception.
+        :`rollback`:
+            DEFAULT. Will do it's best to roll back the changes. Throws the
+            error anyway.
+        :`swallow`:
+            Ignore the error and continue as if nothing happened.
+
+        :return: Number of rows inserted.
+
+        """
+        row_id = kwargs.get('row_id', None)
+        if not row_id:
+            row_num = kwargs.get('row', self.row_count)
+            row_id = self.get_row_id(row_num)
+
+        error_action = kwargs.get('error_action', 'rollback').lower()
+        if error_action not in ('give_up', 'rollback', 'swallow'):
+            raise AttributeError("Invalid `error_action`")
+
+        n_rows = 0
+        _rollback = []
+
+        for slot_row in slot_params:
+            for slot_args in slot_row:
+                try:
+                    # Generate a unique uuid for this row.
+                    insert_row_id = uuid.uuid4.hex()
+                    self.rows.append(insert_row_id)
+                    slot_args['row_id'] = insert_row_id
+                    slot = Slot(*slot_args)
+                    _rollback.append(slot)
+                    slot.save(user, do_row_sync=False)
+                except Exception as e:
+                    if error_action == 'give_up':
+                        raise e
+                    if error_action == 'rollback':
+                        for r in _rollback:
+                            logger.warn('ROLL BACK {}...'.format(r))
+                            Slot.objects(id=r.id).delete()
+                        raise e
+                    if error_action == 'swallow':
+                        logger.error(e)
+                        logger.error('swallow action, so continuing...')
+                finally:
+                    n_rows += 1
+        return n_rows
 
     @property
     def row_count(self):
@@ -170,7 +280,6 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
         if slots.count() == 0:
             return 0
         return max([s.row for s in slots.all()])+1
-
 
     def do_select(self, key_names=None, filter_args=None, limit=100, offset=0,
                   expand_keys=False, expand_slots=False, environment={}):
@@ -257,6 +366,19 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
         """ Get paths associated with node. """
         return Path.objects(node__in=[self, ]).all()
 
+    def save(self, *args, **kwargs):
+        """ Save the current Node.
+
+        :param do_row_sync: Whether to perform row syncronization. default=True
+
+        :see: HistoricalMixin.save
+
+        """
+        super(Node, self).save(*args, **kwargs)
+        if kwargs.get('do_row_sync', False):
+            self.syncronize_rows()
+        super(Node, self).save(*args, **kwargs)
+
 
 class Path(DiscussionMixin, HistoricalMixin, Document):
     """ Heirarchical organization of Node.
@@ -275,12 +397,14 @@ class Path(DiscussionMixin, HistoricalMixin, Document):
         return type(self).objects(parent=self)
 
     def string(self, sep='/'):
+        """ Get the path's full path string. """
         if self.parent:
             return self.parent.string(sep) + sep + self.name
         return sep + self.name
 
     @property
     def string2(self):
+        """ Get the path's full path string. (assumes sep='/') """
         return self.string()
 
     def make(self, user, path):
@@ -305,6 +429,12 @@ class Path(DiscussionMixin, HistoricalMixin, Document):
 
     @classmethod
     def find(cls, path):
+        """ Recursively find a path at `path`.
+
+        :param path: Full path, e.g. ('/path/to/node')
+
+        :return: The path found, or `None` if no path was found.
+        """
         (head, tail) = path_head_tail(path)
         p = cls.objects(name=head, parent=None).first()
         if p is None:
@@ -365,7 +495,8 @@ class Slot(DynamicDocument, DiscussionMixin, JsonMixin):
     """
 
     key = LazyReferenceField('Key', required=True, passthrough=True)
-    row = IntegerField(max_length=128, unique_with='key', required=True)
+    row_num = IntegerField(max_length=128, unique_with='key', required=True)
+    row_id = UUIDField(binary=False, required=True)
     value = DynamicField(required=True)
 
     def __init__(self, *args, **kwargs):
@@ -373,6 +504,41 @@ class Slot(DynamicDocument, DiscussionMixin, JsonMixin):
             logger.debug("args={}, kwargs={}".format(args, kwargs))
             kwargs['row'] = kwargs.get('row', kwargs['key'].node.row_count)
         super(Slot, self).__init__(*args, **kwargs)
+
+    @property
+    def is_reference(self):
+        return str(self.value).startswith('onebase://')
+
+    @property
+    def is_valid_reference(self):
+        """ Return True if the value is a valid reference.
+
+        Note this will return False if the path is invaild as well.
+
+        """
+        try:
+            return self.get_reference is not None
+        except Exception as e:
+            return False
+
+    @property
+    def get_reference(self):
+        """ Get the slot's reference.
+
+        If a slot contains a reference to another slot, get it.
+
+        A reference is in the format:
+
+            onebase://<slot_id>
+        """
+        parts = None
+        if str(self.value).startswith('onebase://'):
+            parts = urlparse(self.value)
+        else:
+            return None
+        slot_id = parts.net_loc
+        if Slot.objects.find(id=slot_id).first() is None:
+            raise OneBaseException('E-103', url=self.value)
 
     def validate(self, clean=True):
         """ Validate this value.
@@ -382,12 +548,17 @@ class Slot(DynamicDocument, DiscussionMixin, JsonMixin):
         """
         # Grab the validator
         st = self.key.soft_type.fetch()
+        if self.is_valid_reference:
+            self.get_reference.validate(clean=clean)
         logger.debug(st)
         st.validate_value(self.value, self.key.size, clean=clean)
 
     def get_repr(self, headers={}, environment={}):
         st = self.key.soft_type.fetch()
         logger.debug(st)
+        if self.is_valid_reference:
+            return self.get_reference.get_repr(headers=headers,
+                                               environment=environment)
         return st.represent_value(self.value,
                                   headers=headers,
                                   environment=environment)
