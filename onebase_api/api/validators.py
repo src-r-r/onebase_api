@@ -58,7 +58,7 @@ validator_views = OnebaseBlueprint('validators', __name__,
                                    url_prefix='/validate')
 
 def make_validation_response(is_valid, ok_status=STATUS.OK,
-                             error_status=STATUS.BAD_REQUEST):
+                             error_status=STATUS.INTERNAL_SERVER_ERROR):
     """ Make an API response from a validation result.
 
     :param is_valid: True if the validation was succcessful.
@@ -97,7 +97,7 @@ def basic_regex_validation(REGEX_FUNC):
         raise OneBaseException('E-100',
                                key='value',
                                expected=length,
-                               result=len(value))
+                               given=len(value))
     if not REGEX_FUNC(value):
         raise OneBaseException('E-101', message="Invalid format")
     return (length is not None) and (len(value) < length and REGEX_FUNC(value))

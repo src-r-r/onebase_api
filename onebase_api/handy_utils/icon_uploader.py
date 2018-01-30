@@ -22,12 +22,14 @@ import os
 import sys
 
 from onebase_api.models import (
-    Type,
+    # Type,
     Slot,
     Key,
     Node,
     Path,
 )
+
+pass
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,7 @@ def create_node():
     keys = [
         Key('')
     ]
-    node = Node(name=)
+    # node = Node(name=)
 
 def upload(args):
     root = os.path.abspath(args.icon_directory)

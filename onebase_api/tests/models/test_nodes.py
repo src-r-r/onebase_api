@@ -18,7 +18,6 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 
 # import unittest
 import logging
-import unittest
 
 from mongoengine import *
 
@@ -27,11 +26,8 @@ from onebase_api.models.auth import (
     Group,
 )
 from onebase_api.models.main import (
-    Type,
-    Key,
     Path,
     Node,
-    create_node_at_path,
 )
 
 from onebase_api.tests.models.base import (
@@ -62,54 +58,6 @@ class AccountTestMixin(CollectionUnitTest):
                               groups=[group, ],
                               password=fake.password(length=16))
             self.admin.save()
-
-class TestTypes(AccountTestMixin):
-
-    database_name = 'test_type'
-
-    def _base(self, u):
-        return 'http://localhost:5002' + u
-
-    def test_creation(self):
-        int_type = Type(name='INTEGER',
-                        validator=self._base('/validate/int'),
-                        repr=self._base('/repr/int'))
-        int_type.save()
-        i = Type.objects(name='INTEGER').first()
-        self.assertIsNotNone(i)
-
-    def test_validation(self):
-        int_type = Type(name='INTEGER2',
-                        validator=self._base('/validate/int'),
-                        repr=self._base('/repr/int'))
-        int_type.save()
-        i = Type.objects(name='INTEGER2').first()
-        self.assertTrue(i.validate_value('100', 5))
-        try:
-            i.validate_value('something', 10)
-            raise AssertionError()
-        except OneBaseException as e:
-            self.assertEqual(e.error_code, 'E-101')
-
-class TestKeys(AccountTestMixin):
-
-    database_name = 'test_keys'
-
-    def setUp(self):
-        super(TestKeys, self).setUp()
-        int_type = Type(name='INTEGER',
-                        validator=self._base('/validate/int'),
-                        repr=self._base('/repr/int'))
-        int_type.save()
-        self.int_type = int_type
-
-    def test_key_creation(self):
-        key = Key(name=fake.word(),
-                  soft_type=self.int_type,
-                  comment=fake.sentence(),
-                  size=1024)
-        key.save(self.admin)
-        self.assertIsNotNone()
 
 class TestPath(AccountTestMixin):
 
@@ -158,26 +106,3 @@ class TestPath(AccountTestMixin):
             self.assertFalse(True)
         except OneBaseException as e:
             self.assertEqual(e.error_code, 'E-206')
-
-
-class TestNode(AccountTestMixin):
-    """ Node tests. """
-
-    @unittest.skip('later')
-    def test_node_view(self):
-        """ A node can be viewed. """
-        def _base(u):
-            return 'http://localhost:5002' + u
-        types = {
-            'integer': Type(name='INTEGER',
-                            validator=_base('/api/1.0/validate/int'),
-                            repr=_base('/api/1.0/repr/int'),
-                            )
-        }
-        for t in types:
-            t.save()
-        keys = [
-            Key(name='first', type=types['integer'])
-        ]
-        node = Node()
-        path = create_node_at_path(self.admin, '/root/a/b', node)

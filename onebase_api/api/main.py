@@ -19,12 +19,15 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 from http import HTTPStatus as STATUS
 import logging
 
+from flask import Response
+
 from onebase_api.onebase import ApiResponse
 from onebase_api.exceptions import OneBaseException
 
 from onebase_api.api.validators import validator_views
 from onebase_api.api.representers import repr_views
 from onebase_api import app
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +47,6 @@ for bp in BLUEPRINTS:
 
 
 app.response_class = ApiResponse
-
 
 @app.errorhandler(OneBaseException)
 def handle_onebase_exception(obe):

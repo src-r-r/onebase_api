@@ -56,14 +56,15 @@ class TestValidators(unittest.TestCase):
             except AssertionError as e:
                 logger.error('path:     {}'.format(path))
                 logger.error('data:     {}'.format(data))
-                logger.error('status:   {}'.format(status))
+                logger.error('status:   {}'.format(resp.status_code))
+                logger.error('message:  {}'.format(resp.data))
                 logger.error(e)
                 raise e
 
     def do_fail_pass(self, path, pass_val, fail_val):
         with app.app_context():
             self.verify_response(path, pass_val, 200)
-            self.verify_response(path, fail_val, 400)
+            self.verify_response(path, fail_val, 500)
 
     def test_int(self):
         logger.debug('Testing validator apps')
