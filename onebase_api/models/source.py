@@ -23,7 +23,7 @@ from mongoengine import (
     StringField,
 )
 
-from onebase_api.models.mixin import (
+from onebase_common.models.mixin import (
     DiscussionMixin,
     JsonMixin,
     HistoricalMixin,

@@ -31,7 +31,7 @@ from datetime import (
     datetime
 )
 
-from onebase_api.models.mixin import TimestampOrderableMixin
+from onebase_common.models.mixin import TimestampOrderableMixin
 
 
 class Action(TimestampOrderableMixin, DynamicEmbeddedDocument):

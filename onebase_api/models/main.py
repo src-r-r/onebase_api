@@ -17,18 +17,22 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import logging
+from json import dumps
 
 from os.path import join
 import uuid
-from urllib.parse import (
-    urlparse
+from urllib import (
+    parse,
 )
 
 from onebase_api.fields import (
     ForgivingURLField,
     SlugField,
     )
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
+from onebase_common.render import (
+    HtmlRenderer,
+)
 from mongoengine import (
     StringField,
     IntField as IntegerField,
@@ -50,7 +54,7 @@ import requests
 from onebase_api.models.discussion import (
     Discussion
 )
-from onebase_api.models.mixin import (
+from onebase_common.models.mixin import (
     JsonMixin,
     HistoricalMixin,
     DiscussionMixin,
@@ -281,9 +285,13 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
             return 0
         return max([s.row for s in slots.all()])+1
 
-    def do_select(self, key_names=None, filter_args=None, limit=100, offset=0,
-                  expand_keys=False, expand_slots=False, environment={}):
+    def do_select(self, client_id,
+                  key_names=None, filter_args=None, limit=100, offset=0,
+                  expand_keys=False, expand_slots=False, environment={},
+                  RendererClass=HtmlRenderer):
         """ Perform a select on a node, returning the resulting rows.
+
+        :param client_id: Primary Key ID of the Client requesting the data.
 
         :param key_names: Key names to select
 
@@ -300,6 +308,10 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
             below.
 
         :param environment: Environment to pass to the representer.
+
+        :param renderer: Render to use. NOTE: I don't like the use of renderers.
+            I need to find a solution that's as environment-agnostic as I can
+            get. For the prototypes, however, they'll stay.
 
         Note
         ====
@@ -337,6 +349,7 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
                 row = idict()
                 col_num = 0
                 for key_ref in self.get_keys():
+                    # renderer = RendererClass()
                     key = key_ref
                     col_num += 1
                     logger.debug("Selecting for key={}, rownum={}, col_num={}"
@@ -353,11 +366,13 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
                         row[key.name] = slot.value
                     if expand_keys and not expand_slots:
                         row[col_num] = [key, slot.value]
-                    if not expand_keys and expand_slots:
-                        row[key.name] = slot.get_repr(environment=environment)
-                    if expand_keys and expand_slots:
-                        row[col_num] = [key,
-                                        slot.get_repr(environment=environment)]
+                    if expand_slots:
+                        val = slot.get_repr(client_id,
+                                            RendererClass=RendererClass)
+                        if expand_keys:
+                            row[col_num] = [key, val]
+                        else:
+                            row[key.name] = val
                 rows[rownum] = row
             return rows
 
@@ -553,12 +568,70 @@ class Slot(DynamicDocument, DiscussionMixin, JsonMixin):
         logger.debug(st)
         st.validate_value(self.value, self.key.size, clean=clean)
 
-    def get_repr(self, headers={}, environment={}):
+    def get_mimetype_url(self, client_id):
         st = self.key.soft_type.fetch()
-        logger.debug(st)
-        if self.is_valid_reference:
-            return self.get_reference.get_repr(headers=headers,
-                                               environment=environment)
-        return st.represent_value(self.value,
-                                  headers=headers,
-                                  environment=environment)
+        return st.repr + '/' + st.name
+
+    def get_mimetype(self, client_id):
+        url = get_mimetype_url(client_id)
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            return resp.data.encode('ascii')
+        return None
+
+    def get_presenter_url(self, client_id):
+        """ Get the presenter URL. """
+        st = self.key.soft_type.fetch()
+        return st.repr + '/' + client_id + "/" + str(self.id)
+
+    def update_repr(self, client_id):
+        """ Update or insert presenter.
+
+        :param client_id: client ID performing presenter update
+
+        :return: result on final insertion or update.
+
+        This method will do an insertion if no record for the presenter exists
+        (meaning, GET request returns 404) or do an update if such a
+
+        """
+        st = self.key.soft_type.fetch()
+        r = self.get_repr(client_id)
+        resp = requests.get(r)
+        if resp.status_code == 404:
+            req_method = requests.post
+        else:
+            req_method = requests.put
+
+        return req_method(r, data=dumps({
+            'slot': {
+                'value': self.value,
+                'soft_type': st.to_json()
+            }
+        }))
+
+    def get_repr(self, client_id, RendererClass=HtmlRenderer):
+        """ Get the value returned by the presenter. """
+        mimetype_url = self.get_presenter_url(client_id)
+        presenter_url = self.get_presenter_url(client_id)
+        res = requests.get(presenter_url)
+        st = self.key.soft_type.fetch()
+        if res.status_code != 404:
+            renderer = RendererClass()
+            return renderer.render(mimetype_url, presenter_url)
+        logger.debug('presenter not found on remote host.')
+        logger.debug('posting this slot to presenter.')
+        data = {
+            'slot': {
+                'value': self.value,
+                'soft_type': st.to_json()
+            }
+        }
+        logger.debug('POST {} {}'.format(presenter_url, data))
+        try:
+            resp = requests.post(presenter_url, json=data)
+            logger.debug('POST {} ==> {}'.format(presenter_url, resp.status_code))
+        except Exception as e:
+            logger.error(e)
+        renderer = RendererClass()
+        return renderer.render(mimetype_url, presenter_url)

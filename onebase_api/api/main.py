@@ -20,7 +20,7 @@ from http import HTTPStatus as STATUS
 import logging
 
 from onebase_api.onebase import ApiResponse
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
 
 from onebase_api.api.validators import validator_views
 from onebase_api.api.representers import repr_views

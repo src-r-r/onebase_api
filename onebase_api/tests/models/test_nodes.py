@@ -41,7 +41,7 @@ from onebase_api.tests.models.base import (
     fake,
     )
 from onebase_common.log.setup import configure_logging
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
 
 configure_logging()
 global_setup()
@@ -94,6 +94,7 @@ class TestTypes(AccountTestMixin):
 class TestKeys(AccountTestMixin):
 
     database_name = 'test_keys'
+    _base = 'validator/{}'.format
 
     def setUp(self):
         super(TestKeys, self).setUp()
@@ -109,7 +110,7 @@ class TestKeys(AccountTestMixin):
                   comment=fake.sentence(),
                   size=1024)
         key.save(self.admin)
-        self.assertIsNotNone()
+        self.assertIsNotNone(Key.objects.first())
 
 class TestPath(AccountTestMixin):
 

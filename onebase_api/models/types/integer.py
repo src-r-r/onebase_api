@@ -15,3 +15,24 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
+
+from onebase_api.models.types import (
+    TypeBase,
+    RegexValidationMixin,
+    )
+
+
+class Integer(RegexValidationMixin):
+
+    NAMES = [
+        'INT',
+        'INTEGER',
+    ]
+
+    EXPRESSION = r'^[\-\+]?\d+$'
+
+    def prepare(self, slot):
+        return str(int(slot.value))
+
+    def render_default(self, slot, **kwargs):
+        return str(int(slot.value))

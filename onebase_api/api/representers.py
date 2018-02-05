@@ -27,7 +27,7 @@ from flask import (
 
 from onebase_common import settings
 from onebase_common.log.setup import configure_logging
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
 from onebase_api.onebase import (
     ApiResponse,
     OnebaseBlueprint,

@@ -54,6 +54,7 @@ class TestValidators(unittest.TestCase):
             try:
                 self.assertEqual(resp.status_code, status)
             except AssertionError as e:
+                logger.error(e)
                 logger.error('path:     {}'.format(path))
                 logger.error('data:     {}'.format(data))
                 logger.error('status:   {}'.format(status))
@@ -70,7 +71,7 @@ class TestValidators(unittest.TestCase):
         for (k, v) in app.url_map._rules_by_endpoint.items():
             logger.debug("{} ||||| {}".format(k, v[0]))
         logger.debug('globals: {}'.format(app.view_functions))
-        i = fake.pyint()
+        i = str(fake.pyint())
         self.do_fail_pass(_('/int'),
                           {'value': i, 'size': len(str(i))+1, },
                           {'value': i, 'size': len(str(i))-5, })
@@ -81,11 +82,11 @@ class TestValidators(unittest.TestCase):
     def test_str(self):
         s = fake.sentence(nb_words=10)
         self.do_fail_pass(_('/string'),
-                          {'value': s, 'size': len(s)+1,},
+                          {'value': s, 'size': len(s)+1, },
                           {'value': s, 'size': len(s)-5})
 
     def test_float(self):
-        f = fake.pyfloat()
+        f = str(fake.pyfloat())
         self.do_fail_pass(_('/float'),
                           {'value': f, 'size': len(str(f))+1, },
                           {'value': f, 'size': len(str(f))-5}, )
