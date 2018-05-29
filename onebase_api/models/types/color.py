@@ -25,7 +25,7 @@ from PIL import Image
 from onebase_common.exceptions import OneBaseException
 
 
-class Color(RegexValidationMixin):
+class ColorType(RegexValidationMixin):
 
     NAMES = [
         'COLOR'
@@ -45,6 +45,12 @@ class Color(RegexValidationMixin):
 
     def prepare(self, slot):
         return slot
+
+    def get_attrs_application_html(self, slot, **kwargs):
+        return dict(type='image/png')
+
+    def get_attrs_default(self, requested_mimetype, slot, **kwargs):
+        return {}
 
     def render_default(self, slot, size=DEFAULT_SIZE, include_alpha=True,
                        encode='PNG'):

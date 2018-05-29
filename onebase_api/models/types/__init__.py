@@ -17,6 +17,7 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 import logging
 import os
+import sys
 import re
 import importlib.util
 import inspect
@@ -72,6 +73,9 @@ for tf in type_files:
         if not isinstance(Class.NAMES, (list, tuple, set)):
             raise TypeError("{}.NAMES must be an list-like type")
         TYPE_SELECTION[Class.NAMES[0].upper()] = Class
+        curr_module = sys.modules[__name__]
+        logger.debug('setting `{}.{}={}`'.format(curr_module, ClassName, Class))
+        setattr(curr_module, ClassName, Class)
 
 logger.debug("Loaded the following types:")
 for TS in TYPE_SELECTION.items():

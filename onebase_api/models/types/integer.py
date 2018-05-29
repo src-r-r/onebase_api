@@ -16,23 +16,34 @@ You should have received a copy of the GNU General Public License
 along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import logging
+
 from onebase_api.models.types import (
     TypeBase,
     RegexValidationMixin,
     )
 
+logger = logging.getLogger(__name__)
 
-class Integer(RegexValidationMixin):
+
+class IntegerType(RegexValidationMixin):
 
     NAMES = [
-        'INT',
         'INTEGER',
+        'INT',
     ]
 
     EXPRESSION = r'^[\-\+]?\d+$'
 
+    def get_attrs_application_html(self, slot, **kwargs):
+        return dict(type='text/plain')
+
+    def get_attrs_default(self, requested_mimetype, slot, **kwargs):
+        return {}
+
     def prepare(self, slot):
         return str(int(slot.value))
 
-    def render_default(self, slot, **kwargs):
+    def render_default(self, slot, requested_mimetype, **kwargs):
+        # import pdb; pdb.set_trace()
         return str(int(slot.value))

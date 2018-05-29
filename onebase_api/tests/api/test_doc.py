@@ -30,7 +30,6 @@ from onebase_api.tests.models.base import (
     )
 
 from onebase_api.models.main import (
-    Type,
     Path,
     Node,
     Key,

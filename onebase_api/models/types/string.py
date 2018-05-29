@@ -18,11 +18,17 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 
 from onebase_api.models.types import TypeBase
 
-class String(TypeBase):
+class StringType(TypeBase):
 
     NAMES = [
         'STRING',
     ]
+
+    def get_attrs_application_html(self, slot, **kwargs):
+        return dict(type='text/plain')
+
+    def get_attrs_default(self, requested_mimetype, slot, **kwargs):
+        return {}
 
     def prepare(self, slot):
         return str(slot.value)

@@ -59,6 +59,7 @@ from onebase_common.models.mixin import (
     HistoricalMixin,
     DiscussionMixin,
 )
+from onebase_api.models.types import TYPE_SELECTION
 from onebase_common.util import (
     path_split,
     path_head_tail,
@@ -136,11 +137,16 @@ class Key(DiscussionMixin, HistoricalMixin, JsonMixin):
 
     name = StringField(max_length=1024, required=True)
     comment = StringField(max_length=4096)
-    soft_type = LazyReferenceField('Type', required=True,
-                                   passthrough=True)
+    soft_type = StringField(required=True, max_length=2049,
+                        choices=TYPE_SELECTION.keys())
     size = IntegerField(max_length=128, required=True)
     position = IntegerField(max_length=128)
     is_primary = BooleanField(default=False)
+
+    @property
+    def type(self):
+        """ Get the class type associated with this key. """
+        return TYPE_SELECTION[self.soft_type]
 
     @property
     def node(self):
@@ -287,8 +293,8 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
 
     def do_select(self, client_id,
                   key_names=None, filter_args=None, limit=100, offset=0,
-                  expand_keys=False, expand_slots=False, environment={},
-                  RendererClass=HtmlRenderer):
+                  expand_keys=False, expand_slots=False,
+                  mimetype='application/html', render_kwargs={}):
         """ Perform a select on a node, returning the resulting rows.
 
         :param client_id: Primary Key ID of the Client requesting the data.
@@ -367,8 +373,11 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
                     if expand_keys and not expand_slots:
                         row[col_num] = [key, slot.value]
                     if expand_slots:
-                        val = slot.get_repr(client_id,
-                                            RendererClass=RendererClass)
+                        """ IMPORTANT SECTION """
+                        val = {'value': slot.id,
+                               'attrs': slot.get_attrs(mimetype,
+                                                       **render_kwargs)}
+                        """ END IMPORTANT SECTION """
                         if expand_keys:
                             row[col_num] = [key, val]
                         else:
@@ -520,9 +529,22 @@ class Slot(DynamicDocument, DiscussionMixin, JsonMixin):
             kwargs['row'] = kwargs.get('row', kwargs['key'].node.row_count)
         super(Slot, self).__init__(*args, **kwargs)
 
+    def save(self, user):
+        """ Rearrange the row_num and row_id before saving. """
+        self.row_num = self.row_num or 0
+        while (Slot.objects.filter(key=self.key, row_num=self.row_num)):
+            logger.debug("Incrementing self.row_num")
+            self.row_num = self.row_num + 1
+        return super(Slot, self).save(user)
+
     @property
     def is_reference(self):
         return str(self.value).startswith('onebase://')
+
+    @property
+    def type(self):
+        logger.debug("slot.type - fetching key {}".format(self.key))
+        return self.key.fetch().type
 
     @property
     def is_valid_reference(self):
@@ -561,77 +583,22 @@ class Slot(DynamicDocument, DiscussionMixin, JsonMixin):
         Validation is a bit unique for 1Base. We're calling a microservice
         (again) to verify the value is valid.
         """
-        # Grab the validator
-        st = self.key.soft_type.fetch()
-        if self.is_valid_reference:
-            self.get_reference.validate(clean=clean)
-        logger.debug(st)
-        st.validate_value(self.value, self.key.size, clean=clean)
+        inst = self.type()
+        return inst.validate(self.value)
 
-    def get_mimetype_url(self, client_id):
-        st = self.key.soft_type.fetch()
-        return st.repr + '/' + st.name
+    def prepare(self):
+        inst = self.type()
+        return inst.prepare(self)
 
-    def get_mimetype(self, client_id):
-        url = get_mimetype_url(client_id)
-        resp = requests.get(url)
-        if resp.status_code == 200:
-            return resp.data.encode('ascii')
-        return None
+    def render(self, requested_mimetype='application/html', **kwargs):
+        inst = self.type()
+        return inst.render(self, requested_mimetype, **kwargs)
 
-    def get_presenter_url(self, client_id):
-        """ Get the presenter URL. """
-        st = self.key.soft_type.fetch()
-        return st.repr + '/' + client_id + "/" + str(self.id)
+    def respond(self, requested_mimetype='application/html', **kwargs):
+        inst = self.type()
+        return inst.respond(self, requested_mimetype, **kwargs)
 
-    def update_repr(self, client_id):
-        """ Update or insert presenter.
-
-        :param client_id: client ID performing presenter update
-
-        :return: result on final insertion or update.
-
-        This method will do an insertion if no record for the presenter exists
-        (meaning, GET request returns 404) or do an update if such a
-
-        """
-        st = self.key.soft_type.fetch()
-        r = self.get_repr(client_id)
-        resp = requests.get(r)
-        if resp.status_code == 404:
-            req_method = requests.post
-        else:
-            req_method = requests.put
-
-        return req_method(r, data=dumps({
-            'slot': {
-                'value': self.value,
-                'soft_type': st.to_json()
-            }
-        }))
-
-    def get_repr(self, client_id, RendererClass=HtmlRenderer):
-        """ Get the value returned by the presenter. """
-        mimetype_url = self.get_presenter_url(client_id)
-        presenter_url = self.get_presenter_url(client_id)
-        res = requests.get(presenter_url)
-        st = self.key.soft_type.fetch()
-        if res.status_code != 404:
-            renderer = RendererClass()
-            return renderer.render(mimetype_url, presenter_url)
-        logger.debug('presenter not found on remote host.')
-        logger.debug('posting this slot to presenter.')
-        data = {
-            'slot': {
-                'value': self.value,
-                'soft_type': st.to_json()
-            }
-        }
-        logger.debug('POST {} {}'.format(presenter_url, data))
-        try:
-            resp = requests.post(presenter_url, json=data)
-            logger.debug('POST {} ==> {}'.format(presenter_url, resp.status_code))
-        except Exception as e:
-            logger.error(e)
-        renderer = RendererClass()
-        return renderer.render(mimetype_url, presenter_url)
+    def get_attrs(self, requested_mimetype='application/html', **kwargs):
+        inst = self.type()
+        kwargs['requested_mimetype'] = requested_mimetype
+        return inst.get_attrs(self, **kwargs)

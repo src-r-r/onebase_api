@@ -33,7 +33,8 @@ class CollectionUnitTest(unittest.TestCase):
         """ Tear down the database. """
         logger = logging.getLogger(__name__)
         if self.database_name is None:
-            raise AttributeError("Missing `database_name` property.")
+            raise AttributeError("Missing `{}.database_name` property."
+                                 .format(type(self).__name__))
         client = MongoClient()
         db = client[self.database_name]
         for cn in db.collection_names():
