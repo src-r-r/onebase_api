@@ -22,10 +22,11 @@ import logging
 from flask import Response
 
 from onebase_api.onebase import ApiResponse
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
 
 from onebase_api.api.validators import validator_views
-from onebase_api.api.representers import repr_views
+# from onebase_api.api.representers import repr_views
+from onebase_api.api.representers import slot_views
 from onebase_api import app
 
 
@@ -33,7 +34,8 @@ logger = logging.getLogger(__name__)
 
 BLUEPRINTS = (
     validator_views,
-    repr_views,
+    # repr_views,
+    slot_views,
 )
 
 

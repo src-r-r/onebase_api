@@ -26,9 +26,11 @@ from flask import (
     # make_response
 )
 
+from mongoengine import connect
+
 from onebase_common import settings
 from onebase_common.log.setup import configure_logging
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
 from onebase_api.onebase import (
     ApiResponse,
     OnebaseBlueprint,
@@ -57,6 +59,10 @@ logger = logging.getLogger(__name__)
 validator_views = OnebaseBlueprint('validators', __name__,
                                    url_prefix='/validate')
 
+@app.errorhandler(OneBaseException)
+def handle_obe(obe):
+    return Response(obe.to_json(), status=STATUS.INTERNAL_SERVER_ERROR)
+
 def make_validation_response(is_valid, ok_status=STATUS.OK,
                              error_status=STATUS.INTERNAL_SERVER_ERROR):
     """ Make an API response from a validation result.
@@ -73,7 +79,6 @@ def make_validation_response(is_valid, ok_status=STATUS.OK,
         return ApiResponse(status=ok_status)
     else:
         return ApiResponse(status=error_status)
-
 
 def get_parts():
     body = request.get_json()

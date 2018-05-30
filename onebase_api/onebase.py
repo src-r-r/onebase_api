@@ -27,7 +27,7 @@ from flask import (
     jsonify,
 )
 
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
 from onebase_common import settings as common_settings
 
 logger = logging.getLogger(__name__)

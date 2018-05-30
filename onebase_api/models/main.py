@@ -17,18 +17,22 @@ along with 1Base.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import logging
+from json import dumps
 
 from os.path import join
 import uuid
-from urllib.parse import (
-    urlparse
+from urllib import (
+    parse,
 )
 
 from onebase_api.fields import (
     ForgivingURLField,
     SlugField,
     )
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
+from onebase_common.render import (
+    HtmlRenderer,
+)
 from mongoengine import (
     StringField,
     IntField as IntegerField,
@@ -50,11 +54,12 @@ import requests
 from onebase_api.models.discussion import (
     Discussion
 )
-from onebase_api.models.mixin import (
+from onebase_common.models.mixin import (
     JsonMixin,
     HistoricalMixin,
     DiscussionMixin,
 )
+from onebase_api.models.types import TYPE_SELECTION
 from onebase_common.util import (
     path_split,
     path_head_tail,
@@ -132,11 +137,16 @@ class Key(DiscussionMixin, HistoricalMixin, JsonMixin):
 
     name = StringField(max_length=1024, required=True)
     comment = StringField(max_length=4096)
-    soft_type = LazyReferenceField('Type', required=True,
-                                   passthrough=True)
+    soft_type = StringField(required=True, max_length=2049,
+                        choices=TYPE_SELECTION.keys())
     size = IntegerField(max_length=128, required=True)
     position = IntegerField(max_length=128)
     is_primary = BooleanField(default=False)
+
+    @property
+    def type(self):
+        """ Get the class type associated with this key. """
+        return TYPE_SELECTION[self.soft_type]
 
     @property
     def node(self):
@@ -281,9 +291,13 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
             return 0
         return max([s.row for s in slots.all()])+1
 
-    def do_select(self, key_names=None, filter_args=None, limit=100, offset=0,
-                  expand_keys=False, expand_slots=False, environment={}):
+    def do_select(self, client_id,
+                  key_names=None, filter_args=None, limit=100, offset=0,
+                  expand_keys=False, expand_slots=False,
+                  mimetype='application/html', render_kwargs={}):
         """ Perform a select on a node, returning the resulting rows.
+
+        :param client_id: Primary Key ID of the Client requesting the data.
 
         :param key_names: Key names to select
 
@@ -300,6 +314,10 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
             below.
 
         :param environment: Environment to pass to the representer.
+
+        :param renderer: Render to use. NOTE: I don't like the use of renderers.
+            I need to find a solution that's as environment-agnostic as I can
+            get. For the prototypes, however, they'll stay.
 
         Note
         ====
@@ -337,6 +355,7 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
                 row = idict()
                 col_num = 0
                 for key_ref in self.get_keys():
+                    # renderer = RendererClass()
                     key = key_ref
                     col_num += 1
                     logger.debug("Selecting for key={}, rownum={}, col_num={}"
@@ -353,11 +372,16 @@ class Node(DiscussionMixin, HistoricalMixin, Document):
                         row[key.name] = slot.value
                     if expand_keys and not expand_slots:
                         row[col_num] = [key, slot.value]
-                    if not expand_keys and expand_slots:
-                        row[key.name] = slot.get_repr(environment=environment)
-                    if expand_keys and expand_slots:
-                        row[col_num] = [key,
-                                        slot.get_repr(environment=environment)]
+                    if expand_slots:
+                        """ IMPORTANT SECTION """
+                        val = {'value': slot.id,
+                               'attrs': slot.get_attrs(mimetype,
+                                                       **render_kwargs)}
+                        """ END IMPORTANT SECTION """
+                        if expand_keys:
+                            row[col_num] = [key, val]
+                        else:
+                            row[key.name] = val
                 rows[rownum] = row
             return rows
 
@@ -505,9 +529,22 @@ class Slot(DynamicDocument, DiscussionMixin, JsonMixin):
             kwargs['row'] = kwargs.get('row', kwargs['key'].node.row_count)
         super(Slot, self).__init__(*args, **kwargs)
 
+    def save(self, user):
+        """ Rearrange the row_num and row_id before saving. """
+        self.row_num = self.row_num or 0
+        while (Slot.objects.filter(key=self.key, row_num=self.row_num)):
+            logger.debug("Incrementing self.row_num")
+            self.row_num = self.row_num + 1
+        return super(Slot, self).save(user)
+
     @property
     def is_reference(self):
         return str(self.value).startswith('onebase://')
+
+    @property
+    def type(self):
+        logger.debug("slot.type - fetching key {}".format(self.key))
+        return self.key.fetch().type
 
     @property
     def is_valid_reference(self):
@@ -546,19 +583,22 @@ class Slot(DynamicDocument, DiscussionMixin, JsonMixin):
         Validation is a bit unique for 1Base. We're calling a microservice
         (again) to verify the value is valid.
         """
-        # Grab the validator
-        st = self.key.soft_type.fetch()
-        if self.is_valid_reference:
-            self.get_reference.validate(clean=clean)
-        logger.debug(st)
-        st.validate_value(self.value, self.key.size, clean=clean)
+        inst = self.type()
+        return inst.validate(self.value)
 
-    def get_repr(self, headers={}, environment={}):
-        st = self.key.soft_type.fetch()
-        logger.debug(st)
-        if self.is_valid_reference:
-            return self.get_reference.get_repr(headers=headers,
-                                               environment=environment)
-        return st.represent_value(self.value,
-                                  headers=headers,
-                                  environment=environment)
+    def prepare(self):
+        inst = self.type()
+        return inst.prepare(self)
+
+    def render(self, requested_mimetype='application/html', **kwargs):
+        inst = self.type()
+        return inst.render(self, requested_mimetype, **kwargs)
+
+    def respond(self, requested_mimetype='application/html', **kwargs):
+        inst = self.type()
+        return inst.respond(self, requested_mimetype, **kwargs)
+
+    def get_attrs(self, requested_mimetype='application/html', **kwargs):
+        inst = self.type()
+        kwargs['requested_mimetype'] = requested_mimetype
+        return inst.get_attrs(self, **kwargs)

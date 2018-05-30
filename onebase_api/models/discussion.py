@@ -41,7 +41,7 @@ configure_logging()
 
 logger = logging.getLogger(__name__)
 
-from onebase_api.models.mixin import (
+from onebase_common.models.mixin import (
     JsonMixin,
     TimestampOrderableMixin
 )

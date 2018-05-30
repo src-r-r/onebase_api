@@ -43,7 +43,7 @@ from onebase_api.models.source import (
 from onebase_api.models.history import (
     Action,
 )
-from onebase_api.exceptions import OneBaseException
+from onebase_common.exceptions import OneBaseException
 
 global_setup()
 

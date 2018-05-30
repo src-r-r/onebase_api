@@ -31,7 +31,7 @@ from mongoengine import (
 )
 
 from onebase_common.settings import ADMIN_GROUPS
-from onebase_api.models.mixin import (
+from onebase_common.models.mixin import (
     JsonMixin
 )
 from onebase_api.fields import (
